@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "LinkedIn Cookie Exporter (CLI)",
+  "version": "0.1.0",
+  "description": "Exports LinkedIn cookies for local linkedin-cli session import.",
+  "permissions": ["cookies", "downloads"],
+  "host_permissions": ["https://www.linkedin.com/*"],
+  "action": {
+    "default_title": "Export LinkedIn Cookies"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}

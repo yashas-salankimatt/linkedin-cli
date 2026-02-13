@@ -1,0 +1,18 @@
+{
+  "manifest_version": 2,
+  "name": "LinkedIn Cookie Exporter (CLI)",
+  "version": "0.1.0",
+  "description": "Exports LinkedIn cookies for local linkedin-cli session import.",
+  "permissions": ["cookies", "downloads", "https://www.linkedin.com/*"],
+  "browser_action": {
+    "default_title": "Export LinkedIn Cookies"
+  },
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "linkedin-cookie-exporter@example.local"
+    }
+  }
+}

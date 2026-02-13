@@ -1,0 +1,15 @@
+node_modules
+dist
+npm-debug.log*
+coverage
+.DS_Store
+*.json.bak
+
+# Scraped data outputs
+*.scrape.json
+investor_*.json
+
+# Session and credentials (NEVER commit these)
+~/.linkedin-cli/
+storageState.json
+linkedin-cookies.json
