@@ -1217,25 +1217,65 @@ export async function listConnections(page: Page, limit: number): Promise<Search
   for (let round = 0; round < maxRounds; round += 1) {
     const connections = await page
       .evaluate(() => {
-        const cards = Array.from(
+        // Strategy 1: Legacy selectors (pre-2026 LinkedIn)
+        const legacyCards = Array.from(
           document.querySelectorAll<HTMLElement>(
             "li.mn-connection-card, li.scaffold-finite-scroll__content > li, div.mn-connection-card"
           )
         );
 
-        return cards.map((card) => {
-          const anchor = card.querySelector<HTMLAnchorElement>("a[href*='/in/']");
-          const nameEl = card.querySelector<HTMLElement>("span.mn-connection-card__name, span[aria-hidden='true']");
-          const occupationEl = card.querySelector<HTMLElement>(
-            "span.mn-connection-card__occupation, p.mn-connection-card__occupation"
-          );
+        if (legacyCards.length > 0) {
+          return legacyCards.map((card) => {
+            const anchor = card.querySelector<HTMLAnchorElement>("a[href*='/in/']");
+            const nameEl = card.querySelector<HTMLElement>("span.mn-connection-card__name, span[aria-hidden='true']");
+            const occupationEl = card.querySelector<HTMLElement>(
+              "span.mn-connection-card__occupation, p.mn-connection-card__occupation"
+            );
+            return {
+              name: nameEl?.innerText?.trim() ?? "",
+              headline: occupationEl?.innerText?.trim() ?? "",
+              profileUrl: anchor?.href ?? ""
+            };
+          });
+        }
 
-          return {
-            name: nameEl?.innerText?.trim() ?? "",
-            headline: occupationEl?.innerText?.trim() ?? "",
-            profileUrl: anchor?.href ?? ""
-          };
-        });
+        // Strategy 2: Modern LinkedIn (2026+) — hashed class names, div-based cards.
+        // Each connection card is a div containing profile links and <p> elements for
+        // name, headline, and "Connected on ..." text. We group by unique profile URL.
+        const main = document.querySelector("main");
+        if (!main) return [];
+
+        const profileLinks = Array.from(main.querySelectorAll<HTMLAnchorElement>("a[href*='/in/']"));
+        const cardMap = new Map<string, { name: string; headline: string; profileUrl: string }>();
+
+        for (const link of profileLinks) {
+          const href = link.getAttribute("href")?.replace(/\/$/, "") ?? "";
+          if (!href || cardMap.has(href)) continue;
+
+          // Find the closest container div that has <p> children (the card wrapper)
+          let container = link.parentElement;
+          // Walk up to find a div with multiple <p> children (the card)
+          for (let i = 0; i < 5 && container; i++) {
+            const ps = container.querySelectorAll("p");
+            if (ps.length >= 2) break;
+            container = container.parentElement;
+          }
+
+          if (!container) continue;
+          const ps = Array.from(container.querySelectorAll("p"));
+          // Usually: p[0]=name, p[1]=headline, p[2]="Connected on ..."
+          const name = ps[0]?.textContent?.trim() ?? "";
+          const headline = ps[1]?.textContent?.trim() ?? "";
+
+          // Skip if this looks like a "Connected on" or navigation text
+          if (!name || name.startsWith("Connected on") || name.length > 100) continue;
+          // Skip headline if it's "Connected on ..."
+          const cleanHeadline = headline.startsWith("Connected on") ? "" : headline;
+
+          cardMap.set(href, { name, headline: cleanHeadline, profileUrl: href });
+        }
+
+        return Array.from(cardMap.values());
       })
       .catch(() => []);
 
@@ -1273,7 +1313,20 @@ export async function listConnections(page: Page, limit: number): Promise<Search
       break;
     }
 
-    await page.evaluate((pixels) => window.scrollBy(0, pixels), randomScrollPixels());
+    // Try clicking "Load more" button first (modern LinkedIn), then scroll
+    const clickedLoadMore = await page.evaluate(() => {
+      const buttons = Array.from(document.querySelectorAll("button"));
+      const loadMore = buttons.find((b) => b.textContent?.trim() === "Load more");
+      if (loadMore) {
+        loadMore.click();
+        return true;
+      }
+      return false;
+    });
+
+    if (!clickedLoadMore) {
+      await page.evaluate((pixels) => window.scrollBy(0, pixels), randomScrollPixels());
+    }
     await randomDelay(600, 1200);
   }
 
